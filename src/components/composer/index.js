@@ -6,18 +6,19 @@ import { withRouter } from 'react-router';
 import { connect } from 'react-redux';
 import isURL from 'validator/lib/isURL';
 import debounce from 'debounce';
+import queryString from 'query-string';
 import { KeyBindingUtil } from 'draft-js';
 import { URLS } from '../../helpers/regexps';
-import { track } from '../../helpers/events';
 import { closeComposer } from '../../actions/composer';
 import { changeActiveThread } from '../../actions/dashboardFeed';
 import { addToastWithTimeout } from '../../actions/toasts';
-import Editor from '../draftjs-editor';
+import Editor from '../rich-text-editor';
 import {
   toPlainText,
   fromPlainText,
   toJSON,
   toState,
+  isAndroid,
 } from 'shared/draft-utils';
 import getComposerCommunitiesAndChannels from 'shared/graphql/queries/composer/getComposerCommunitiesAndChannels';
 import type { GetComposerType } from 'shared/graphql/queries/composer/getComposerCommunitiesAndChannels';
@@ -42,6 +43,7 @@ import {
   sortChannels,
   getDefaultActiveChannel,
 } from './utils';
+import { events, track } from 'src/helpers/analytics';
 
 const ENDS_IN_WHITESPACE = /(\s|\n)$/;
 
@@ -81,6 +83,13 @@ type Props = {
 
 const LS_BODY_KEY = 'last-thread-composer-body';
 const LS_TITLE_KEY = 'last-thread-composer-title';
+const LS_COMPOSER_EXPIRE = 'last-thread-composer-expire';
+
+const ONE_DAY = (): string => {
+  const time = new Date().getTime() + 60 * 60 * 24 * 1000;
+  return time.toString();
+};
+
 // We persist the body and title to localStorage
 // so in case the app crashes users don't loose content
 class ComposerWithData extends Component<Props, State> {
@@ -89,19 +98,7 @@ class ComposerWithData extends Component<Props, State> {
   constructor(props) {
     super(props);
 
-    let storedBody;
-    let storedTitle;
-    if (localStorage) {
-      try {
-        storedBody = toState(
-          JSON.parse(localStorage.getItem(LS_BODY_KEY) || '')
-        );
-        storedTitle = localStorage.getItem(LS_TITLE_KEY);
-      } catch (err) {
-        localStorage.removeItem(LS_BODY_KEY);
-        localStorage.removeItem(LS_TITLE_KEY);
-      }
-    }
+    let { storedBody, storedTitle } = this.getTitleAndBody();
 
     this.state = {
       title: storedTitle || '',
@@ -127,6 +124,39 @@ class ComposerWithData extends Component<Props, State> {
       500
     );
   }
+
+  removeStorage = () => {
+    localStorage.removeItem(LS_BODY_KEY);
+    localStorage.removeItem(LS_TITLE_KEY);
+    localStorage.removeItem(LS_COMPOSER_EXPIRE);
+  };
+
+  getTitleAndBody = () => {
+    let storedBody;
+    let storedTitle;
+
+    if (localStorage) {
+      try {
+        const expireTime = localStorage.getItem(LS_COMPOSER_EXPIRE);
+        const currTime = new Date().getTime().toString();
+        /////if current time is greater than valid till of text then please expire title/body back to ''
+        if (expireTime && currTime > expireTime) {
+          this.removeStorage();
+        } else {
+          storedBody = toState(
+            JSON.parse(localStorage.getItem(LS_BODY_KEY) || '')
+          );
+          storedTitle = localStorage.getItem(LS_TITLE_KEY);
+        }
+      } catch (err) {
+        this.removeStorage();
+      }
+    }
+    return {
+      storedBody,
+      storedTitle,
+    };
+  };
 
   handleIncomingProps = props => {
     const { user } = props.data;
@@ -198,20 +228,7 @@ class ComposerWithData extends Component<Props, State> {
   };
 
   componentWillMount() {
-    let storedBody;
-    let storedTitle;
-    if (localStorage) {
-      try {
-        storedBody = toState(
-          JSON.parse(localStorage.getItem(LS_BODY_KEY) || '')
-        );
-        storedTitle = localStorage.getItem(LS_TITLE_KEY);
-      } catch (err) {
-        localStorage.removeItem(LS_BODY_KEY);
-        localStorage.removeItem(LS_TITLE_KEY);
-      }
-    }
-
+    let { storedBody, storedTitle } = this.getTitleAndBody();
     this.setState({
       title: this.state.title || storedTitle || '',
       body: this.state.body || storedBody || '',
@@ -220,6 +237,7 @@ class ComposerWithData extends Component<Props, State> {
 
   componentDidMount() {
     this.handleIncomingProps(this.props);
+    track(events.THREAD_CREATED_INITED);
     // $FlowIssue
     document.addEventListener('keydown', this.handleKeyPress, false);
   }
@@ -245,11 +263,20 @@ class ComposerWithData extends Component<Props, State> {
       // Community/channel view
       this.closeComposer();
       // Dashboard
-      this.props.dispatch(changeActiveThread(null));
+      this.activateLastThread();
       return;
     }
 
     if (cmdEnter) return this.publishThread();
+  };
+
+  activateLastThread = () => {
+    // we get the last thread id from the query params and dispatch it
+    // as the active thread.
+    const { location } = this.props;
+    const { t: threadId } = queryString.parse(location.search);
+
+    this.props.dispatch(changeActiveThread(threadId));
   };
 
   changeTitle = e => {
@@ -307,33 +334,46 @@ class ComposerWithData extends Component<Props, State> {
 
   clearEditorStateAfterPublish = () => {
     try {
-      localStorage.removeItem(LS_BODY_KEY);
-      localStorage.removeItem(LS_TITLE_KEY);
+      this.removeStorage();
     } catch (err) {
       console.error(err);
     }
   };
 
+  onCancelClick = () => {
+    this.activateLastThread();
+  };
+
+  handleTitleBodyChange = titleOrBody => {
+    if (titleOrBody === 'body') {
+      localStorage.setItem(
+        LS_BODY_KEY,
+        JSON.stringify(toJSON(this.state.body))
+      );
+    } else {
+      localStorage.setItem(LS_TITLE_KEY, this.state.title);
+    }
+    localStorage.setItem(LS_COMPOSER_EXPIRE, ONE_DAY());
+  };
+
   persistBodyToLocalStorageWithDebounce = body => {
-    return localStorage.setItem(
-      LS_BODY_KEY,
-      JSON.stringify(toJSON(this.state.body))
-    );
+    if (!localStorage) return;
+    this.handleTitleBodyChange('body');
   };
 
   persistTitleToLocalStorageWithDebounce = title => {
-    return localStorage.setItem(LS_TITLE_KEY, this.state.title);
+    if (!localStorage) return;
+    this.handleTitleBodyChange('title');
   };
 
   persistTitleToLocalStorage = title => {
-    return localStorage.setItem(LS_TITLE_KEY, this.state.title);
+    if (!localStorage) return;
+    this.handleTitleBodyChange('title');
   };
 
   persistBodyToLocalStorage = body => {
-    return localStorage.setItem(
-      LS_BODY_KEY,
-      JSON.stringify(toJSON(this.state.body))
-    );
+    if (!localStorage) return;
+    this.handleTitleBodyChange('body');
   };
 
   setActiveCommunity = e => {
@@ -416,7 +456,7 @@ class ComposerWithData extends Component<Props, State> {
 
     const content = {
       title: title.trim(),
-      body: JSON.stringify(jsonBody),
+      body: isAndroid() ? toPlainText(body) : JSON.stringify(jsonBody),
     };
 
     const attachments = [];
@@ -441,7 +481,9 @@ class ComposerWithData extends Component<Props, State> {
     const thread = {
       channelId,
       communityId,
-      type: 'DRAFTJS',
+      // NOTE(@mxstbr): On android we send plain text content
+      // which is parsed as markdown to draftjs on the server
+      type: isAndroid() ? 'TEXT' : 'DRAFTJS',
       content,
       attachments,
       filesToUpload,
@@ -459,7 +501,6 @@ class ComposerWithData extends Component<Props, State> {
         // get the thread id to redirect the user
         const id = data.publishThread.id;
 
-        track('thread', 'published', null);
         this.clearEditorStateAfterPublish();
 
         // stop the loading spinner on the publish button
@@ -660,10 +701,7 @@ class ComposerWithData extends Component<Props, State> {
           )}
 
           <FlexRow>
-            <TextButton
-              hoverColor="warn.alt"
-              onClick={() => this.props.dispatch(changeActiveThread(null))}
-            >
+            <TextButton hoverColor="warn.alt" onClick={this.onCancelClick}>
               Cancel
             </TextButton>
             <Button

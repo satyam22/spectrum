@@ -9,7 +9,6 @@ import processReactionNotification from './queues/reaction-notification';
 import processChannelNotification from './queues/channel-notification';
 import processCommunityNotification from './queues/community-notification';
 import processThreadNotification from './queues/thread-notification';
-import processSlackImport from './queues/slack-import';
 import processCommunityInvite from './queues/community-invite';
 import processCommunityInvoicePaid from './queues/community-invoice-paid';
 import processProInvoicePaid from './queues/pro-invoice-paid';
@@ -20,6 +19,7 @@ import processUserRequestedJoinPrivateChannel from './queues/private-channel-req
 import processUserRequestPrivateChannelApproved from './queues/private-channel-request-approved';
 import processPushNotifications from './queues/send-push-notifications';
 import startNotificationsListener from './listeners/notifications';
+import processSendSlackInvitations from './queues/send-slack-invitations';
 import {
   MESSAGE_NOTIFICATION,
   MENTION_NOTIFICATION,
@@ -28,7 +28,6 @@ import {
   CHANNEL_NOTIFICATION,
   COMMUNITY_NOTIFICATION,
   THREAD_NOTIFICATION,
-  SLACK_IMPORT,
   COMMUNITY_INVITE_NOTIFICATION,
   COMMUNITY_INVOICE_PAID_NOTIFICATION,
   PRO_INVOICE_PAID_NOTIFICATION,
@@ -37,13 +36,15 @@ import {
   PRIVATE_CHANNEL_REQUEST_SENT,
   PRIVATE_CHANNEL_REQUEST_APPROVED,
   SEND_PUSH_NOTIFICATIONS,
+  TRACK_USER_LAST_SEEN,
+  SEND_SLACK_INVITIATIONS,
 } from './queues/constants';
 
 const PORT = process.env.PORT || 3003;
 
-console.log('\n🛠 Athena, the processing worker, is starting...');
+debug('\n🛠 Athena, the processing worker, is starting...');
 debug('Logging with debug enabled!');
-console.log('');
+debug('');
 
 const server = createWorker({
   [MESSAGE_NOTIFICATION]: processMessageNotification,
@@ -53,11 +54,11 @@ const server = createWorker({
   [CHANNEL_NOTIFICATION]: processChannelNotification,
   [COMMUNITY_NOTIFICATION]: processCommunityNotification,
   [THREAD_NOTIFICATION]: processThreadNotification,
-  [SLACK_IMPORT]: processSlackImport,
+  [SEND_SLACK_INVITIATIONS]: processSendSlackInvitations,
   [COMMUNITY_INVITE_NOTIFICATION]: processCommunityInvite,
   [COMMUNITY_INVOICE_PAID_NOTIFICATION]: processCommunityInvoicePaid,
   [PRO_INVOICE_PAID_NOTIFICATION]: processProInvoicePaid,
-  'track user thread last seen': trackUserThreadLastSeen,
+  [TRACK_USER_LAST_SEEN]: trackUserThreadLastSeen,
   [PROCESS_ADMIN_TOXIC_MESSAGE]: processAdminMessageModeration,
   [PROCESS_ADMIN_TOXIC_THREAD]: processAdminThreadModeration,
   [PRIVATE_CHANNEL_REQUEST_SENT]: processUserRequestedJoinPrivateChannel,
@@ -67,7 +68,7 @@ const server = createWorker({
 
 startNotificationsListener();
 
-console.log(
+debug(
   `🗄 Queues open for business ${(process.env.NODE_ENV === 'production' &&
     // $FlowIssue
     `at ${process.env.COMPOSE_REDIS_URL}:${process.env.COMPOSE_REDIS_PORT}`) ||
@@ -76,7 +77,7 @@ console.log(
 
 // $FlowIssue
 server.listen(PORT, 'localhost', () => {
-  console.log(
+  debug(
     `💉 Healthcheck server running at ${server.address().address}:${
       server.address().port
     }`

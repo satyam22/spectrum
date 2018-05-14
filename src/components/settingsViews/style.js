@@ -1,7 +1,8 @@
+// @flow
 import styled from 'styled-components';
 import { Tooltip } from '../globals';
 
-export const View = styled.div`
+export const View = styled.main`
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -34,6 +35,7 @@ export const Column = styled.div`
   @media (max-width: 768px) {
     flex: 1 0 100%;
     padding: 0;
+    max-width: 100%;
 
     &:first-of-type {
       padding-top: 8px;
@@ -56,9 +58,9 @@ export const SectionCard = styled.div`
 
 export const SectionCardFooter = styled.div`
   border-top: 1px solid ${props => props.theme.bg.border};
-  width: 100%;
-  padding: 16px 0 0;
-  margin-top: 16px;
+  width: calc(100% + 32px);
+  margin: 16px -16px 0;
+  padding: 16px 16px 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -80,6 +82,14 @@ export const SectionTitle = styled.h3`
   font-weight: 700;
   color: ${props => props.theme.text.default};
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+`;
+
+export const SectionTitleWithIcon = styled(SectionTitle)`
+  .icon {
+    margin-right: 12px;
+  }
 `;
 
 export const Heading = styled.h1`
@@ -128,6 +138,7 @@ export const StyledSubnav = styled.div`
     padding: 0 16px;
     display: block;
     justify-content: center;
+    overflow-x: scroll;
   }
 `;
 
@@ -182,6 +193,9 @@ export const EditDropdownContainer = styled.div`
   position: relative;
   color: ${props => props.theme.text.alt};
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 
 export const Dropdown = styled.div`

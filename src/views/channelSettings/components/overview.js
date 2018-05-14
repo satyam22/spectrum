@@ -10,6 +10,7 @@ import BlockedUsers from './blockedUsers';
 import ChannelMembers from './channelMembers';
 import ArchiveForm from './archiveForm';
 import LoginTokenSettings from './loginTokenSettings';
+import SlackConnection from '../../communitySettings/components/slack';
 
 type Props = {
   community: Object,
@@ -17,15 +18,21 @@ type Props = {
   communitySlug: string,
   togglePending: Function,
   unblock: Function,
+  initMessage: Function,
 };
 class Overview extends React.Component<Props> {
   render() {
-    const { channel } = this.props;
+    const { channel, initMessage, community } = this.props;
 
     return (
       <SectionsContainer data-cy="channel-overview">
         <Column>
           <EditForm channel={channel} />
+          <SlackConnection
+            type={'bot-only'}
+            id={community.id}
+            channelFilter={channel.id}
+          />
           {channel.slug !== 'general' && <ArchiveForm channel={channel} />}
           {channel.isPrivate && (
             <LoginTokenSettings id={channel.id} channel={channel} />
@@ -35,16 +42,22 @@ class Overview extends React.Component<Props> {
         <Column>
           {channel.isPrivate && (
             <span>
-              <ChannelMembers channel={channel} id={channel.id} />
+              <ChannelMembers
+                channel={channel}
+                id={channel.id}
+                initMessage={initMessage}
+              />
               <PendingUsers
                 togglePending={this.props.togglePending}
                 channel={channel}
                 id={channel.id}
+                initMessage={initMessage}
               />
               <BlockedUsers
                 unblock={this.props.unblock}
                 channel={channel}
                 id={channel.id}
+                initMessage={initMessage}
               />
             </span>
           )}

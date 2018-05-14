@@ -1,3 +1,4 @@
+// @flow
 import styled, { css } from 'styled-components';
 import Link from 'src/components/link';
 import Avatar from '../../components/avatar';
@@ -86,8 +87,9 @@ export const Input = styled(FlexRow)`
   justify-content: center;
   z-index: ${zIndex.chatInput};
   grid-area: footer;
-  width: 100%;
-  max-width: 1024px;
+  max-width: 100%;
+  align-self: stretch;
+  overflow: hidden;
 
   @media (max-width: 768px) {
     z-index: ${zIndex.mobileInput};
@@ -106,6 +108,7 @@ export const ChatInputWrapper = styled(FlexCol)`
   margin: 0;
   flex: auto;
   position: relative;
+  max-width: 100%;
 `;
 
 export const DetailViewWrapper = styled(FlexCol)`
@@ -183,17 +186,9 @@ export const DropWrap = styled(FlexCol)`
   }
 
   .flyout {
-    display: none;
     position: absolute;
-    top: 100%;
-    right: 0;
-    transition: ${Transition.hover.off};
-  }
-
-  &:hover .flyout,
-  &.open > .flyout {
-    display: inline-block;
-    transition: ${Transition.hover.on};
+    right: auto;
+    width: 200px;
   }
 `;
 
@@ -546,6 +541,12 @@ export const PillLabel = styled.span`
     `};
 `;
 
+export const SidebarChannelPill = styled.div`
+  display: flex;
+  justify-content: center;
+  margin: 8px 16px 16px;
+`;
+
 export const Lock = styled.span`
   margin-right: 4px;
 `;
@@ -573,6 +574,10 @@ export const ActionBarContainer = styled.div`
     border-right: 0;
     margin-top: 16px;
   }
+`;
+
+export const WatercoolerActionBarContainer = styled(ActionBarContainer)`
+  margin-bottom: 16px;
 `;
 
 export const FollowButton = styled(Button)`
@@ -742,7 +747,6 @@ export const WatercoolerIntroContainer = styled.div`
   align-items: center;
   justify-content: center;
   padding: 32px 32px 36px;
-  border-bottom: 1px solid ${props => props.theme.bg.border};
   background: ${props => props.theme.bg.default};
   flex: auto;
   flex-direction: column;
